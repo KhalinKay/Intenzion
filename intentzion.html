@@ -1,0 +1,845 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Assistant Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Segoe UI', Arial, sans-serif; }
+    .section { background: linear-gradient(135deg, #f8fafc 0%, #e0e7ef 100%); }
+    .shadow-xl { box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.12); }
+    .rounded-2xl { border-radius: 1.25rem; }
+    .rounded-xl { border-radius: 0.75rem; }
+    .material-icons { font-size: 1.3em; vertical-align: middle; }
+    .transition { transition: all 0.2s; }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div class="container mx-auto p-4">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white p-8 rounded-2xl shadow-xl mb-10 flex flex-col items-center justify-center">
+      <h1 class="text-4xl font-extrabold tracking-tight mb-2 text-center drop-shadow">Personal Assistant Dashboard</h1>
+      <p class="text-lg text-center opacity-90">Your hub for productivity and wellness</p>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="flex flex-wrap gap-2 mb-8 justify-center">
+      <button onclick="showSection('today')" class="px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-700 transition">Today</button>
+      <button onclick="showSection('calendar')" class="px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-700 transition">Calendar</button>
+      <button onclick="showSection('brain-warmup')" class="px-4 py-2 bg-green-500 text-white rounded-lg shadow hover:bg-green-700 transition">Brain Warm-Up</button>
+      <button onclick="showSection('goals')" class="px-4 py-2 bg-purple-500 text-white rounded-lg shadow hover:bg-purple-700 transition">Goals</button>
+      <button onclick="showSection('mood')" class="px-4 py-2 bg-yellow-500 text-white rounded-lg shadow hover:bg-yellow-600 transition">Mood Tracker</button>
+      <button onclick="showSection('activity')" class="px-4 py-2 bg-pink-500 text-white rounded-lg shadow hover:bg-pink-700 transition">Activity Log</button>
+    </nav>
+
+    <!-- Main Content -->
+    <main>
+      <!-- Today (Day-Centric) Section -->
+      <section id="today" class="section bg-white p-6 rounded-2xl shadow-xl max-w-2xl mx-auto mt-6">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-3xl font-bold text-blue-700">Today: <span id="today-date"></span></h2>
+          <button onclick="showSection('calendar')" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white rounded-lg shadow hover:from-blue-600 hover:to-blue-800 transition">Show Calendar</button>
+        </div>
+        <div id="today-current-mood" class="mb-6"></div>
+        <div class="bg-white rounded-xl shadow p-4 mb-6">
+          <h3 class="text-lg font-semibold text-gray-700 mb-2 flex items-center"><span class="material-icons mr-2">schedule</span>Timeline</h3>
+          <ul id="today-timeline" class="space-y-2"></ul>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-white rounded-xl shadow p-4 flex-1">
+            <h3 class="text-lg font-semibold text-blue-600 mb-2 flex items-center"><span class="material-icons mr-2">mood</span>Moods</h3>
+            <ul id="today-moods" class="space-y-2"></ul>
+          </div>
+          <div class="bg-white rounded-xl shadow p-4 flex-1">
+            <h3 class="text-lg font-semibold text-green-600 mb-2 flex items-center"><span class="material-icons mr-2">directions_run</span>Activities</h3>
+            <ul id="today-activities" class="space-y-2"></ul>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 mt-6">
+          <h3 class="text-lg font-semibold text-purple-600 mb-2 flex items-center"><span class="material-icons mr-2">flag</span>Goals & Events</h3>
+          <ul id="today-events" class="space-y-2"></ul>
+        </div>
+      </section>
+
+      <!-- Dashboard Section -->
+      <section id="dashboard" class="section bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-2xl font-semibold mb-4">Dashboard</h2>
+        <p>Welcome to your personal assistant! Use the navigation to access features like brain warm-ups, calendar, goal setting, mood tracking, and activity logging.</p>
+        <div class="mt-4">
+          <h3 class="text-xl font-medium">Quick Stats</h3>
+          <p>Goals Completed: <span id="goals-completed">0</span></p>
+          <p>Mood Today: <span id="mood-today">Not set</span></p>
+          <p>Activities Logged: <span id="activities-logged">0</span></p>
+        </div>
+      </section>
+
+      <!-- Brain Warm-Up Section -->
+      <section id="brain-warmup" class="section hidden bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-2xl font-semibold mb-4">Brain Warm-Up</h2>
+        <p class="mb-4">Kickstart your brain with these quick, science-backed exercises!</p>
+
+        <!-- Start Screen -->
+        <div id="warmup-start" class="warmup-screen">
+          <button onclick="startWarmup()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-700">Start Warmup</button>
+        </div>
+
+        <!-- Stroop Task -->
+        <div id="stroop-task" class="warmup-screen hidden">
+          <h3 class="text-xl font-medium mb-2">Stroop Task</h3>
+          <p>Select the color of the word, not the word itself.</p>
+          <p id="stroop-word" class="text-3xl font-bold my-4"></p>
+          <div class="flex space-x-4">
+            <button onclick="checkStroop('red')" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-700">Red</button>
+            <button onclick="checkStroop('blue')" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700">Blue</button>
+            <button onclick="checkStroop('green')" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-700">Green</button>
+            <button onclick="checkStroop('yellow')" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-700">Yellow</button>
+          </div>
+          <p id="stroop-feedback" class="mt-4"></p>
+        </div>
+
+        <!-- Number Sequence Memory -->
+        <div id="number-sequence" class="warmup-screen hidden">
+          <h3 class="text-xl font-medium mb-2">Number Sequence Memory</h3>
+          <p>Memorize the sequence, then enter it.</p>
+          <p id="sequence-display" class="text-xl my-4"></p>
+          <input id="sequence-input" type="text" placeholder="Enter sequence" class="p-2 border rounded mb-4">
+          <button onclick="checkSequence()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700">Submit</button>
+          <p id="sequence-feedback" class="mt-4"></p>
+        </div>
+
+        <!-- Mental Math Challenge -->
+        <div id="mental-math" class="warmup-screen hidden">
+          <h3 class="text-xl font-medium mb-2">Mental Math Challenge</h3>
+          <p>Solve the math problem. Use the canvas to work it out.</p>
+          <p id="math-problem" class="text-xl my-4"></p>
+          <canvas id="math-canvas" width="300" height="150" class="border mb-4"></canvas>
+          <input id="math-answer" type="text" placeholder="Enter answer" class="p-2 border rounded mb-4">
+          <button onclick="checkMath()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700">Submit</button>
+          <div class="flex space-x-2 mt-2">
+            <button onclick="setTool('pen')" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-700">Pen</button>
+            <button onclick="setTool('eraser')" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-700">Eraser</button>
+            <button onclick="clearCanvas()" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-700">Clear</button>
+          </div>
+          <p id="math-feedback" class="mt-4"></p>
+        </div>
+
+        <!-- Pattern Recognition -->
+        <div id="pattern-recognition" class="warmup-screen hidden">
+          <h3 class="text-xl font-medium mb-2">Pattern Recognition</h3>
+          <p>Identify the missing number in the pattern.</p>
+          <p id="pattern-display" class="text-xl my-4"></p>
+          <input id="pattern-input" type="text" placeholder="Enter missing number" class="p-2 border rounded mb-4">
+          <button onclick="checkPattern()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700">Submit</button>
+          <p id="pattern-feedback" class="mt-4"></p>
+        </div>
+
+        <!-- Completion Screen -->
+        <div id="warmup-complete" class="warmup-screen hidden">
+          <h3 class="text-xl font-medium mb-2">Great Job!</h3>
+          <p>Your brain is warmed up and ready for the day!</p>
+          <button onclick="resetWarmup()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-700 mt-4">Try Again</button>
+        </div>
+      </section>
+
+      <!-- Calendar Section -->
+      <section id="calendar" class="section hidden bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-2xl font-semibold mb-4">Calendar</h2>
+        <div id="calendar-view"></div>
+        <div class="mt-4">
+          <input id="event-title" type="text" placeholder="Event title" class="p-2 border rounded mr-2">
+          <input id="event-date" type="date" class="p-2 border rounded mr-2">
+          <input id="event-time" type="time" class="p-2 border rounded mr-2" placeholder="Time">
+          <button onclick="addEvent()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700">Add Event</button>
+        </div>
+        <!-- Daily Details Modal -->
+        <div id="daily-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+          <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg relative">
+            <button onclick="closeDailyModal()" class="absolute top-2 right-2 text-gray-500 hover:text-gray-800">&times;</button>
+            <h3 class="text-xl font-semibold mb-2" id="modal-date-title"></h3>
+            <div>
+              <h4 class="font-bold mt-2">Moods</h4>
+              <ul id="modal-moods" class="mb-2"></ul>
+              <h4 class="font-bold mt-2">Activities</h4>
+              <ul id="modal-activities" class="mb-2"></ul>
+              <h4 class="font-bold mt-2">Events & Goals</h4>
+              <ul id="modal-events" class="mb-2"></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Goals Section -->
+      <section id="goals" class="section hidden bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-2xl font-semibold mb-4">Goal Setting</h2>
+        <input id="goal-input" type="text" placeholder="Enter a new goal" class="w-full p-2 border rounded mb-2">
+        <input id="goal-date" type="date" class="w-full p-2 border rounded mb-2">
+        <input id="goal-time" type="time" class="w-full p-2 border rounded mb-2" placeholder="Goal time">
+        <input id="goal-reminder" type="time" class="w-full p-2 border rounded mb-4" placeholder="Reminder time">
+        <button onclick="addGoal()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700">Add Goal</button>
+        <ul id="goal-list" class="mt-4"></ul>
+      </section>
+
+      <!-- Mood Tracker Section -->
+      <section id="mood" class="section hidden bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-2xl font-semibold mb-4">Mood Tracker</h2>
+        <select id="mood-select" class="p-2 border rounded mb-4">
+          <option value="">Select your mood</option>
+          <option value="Happy">Happy 😊</option>
+          <option value="Neutral">Neutral 😐</option>
+          <option value="Sad">Sad 😔</option>
+          <option value="Excited">Excited 🎉</option>
+          <option value="Stressed">Stressed 😓</option>
+        </select>
+        <button onclick="logMood()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700">Log Mood</button>
+        <div id="mood-history" class="mt-4"></div>
+      </section>
+
+      <!-- Activity Log Section -->
+      <section id="activity" class="section hidden bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-2xl font-semibold mb-4">Activity Log</h2>
+        <input id="activity-input" type="text" placeholder="Enter an activity" class="w-full p-2 border rounded mb-4">
+        <button onclick="logActivity()" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-700">Log Activity</button>
+        <ul id="activity-list" class="mt-4"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // --- Notification Permission ---
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+
+    // Data Persistence
+    function loadData(key, defaultValue) {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : defaultValue;
+    }
+    function saveData(key, data) {
+      localStorage.setItem(key, JSON.stringify(data));
+    }
+
+    // Section Navigation
+    function showSection(sectionId) {
+      document.querySelectorAll('.section').forEach(section => section.classList.add('hidden'));
+      document.getElementById(sectionId).classList.remove('hidden');
+      if (sectionId === 'calendar') renderCalendar();
+      if (sectionId === 'today') renderTodayView();
+    }
+
+    // Brain Warm-Up Logic
+    let currentTask = 0;
+    let randomizedTasks = [];
+    const allTasks = ['stroop-task', 'number-sequence', 'mental-math', 'pattern-recognition'];
+    function shuffle(array) {
+      let arr = array.slice();
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+    function showTask(taskId) {
+      document.querySelectorAll('.warmup-screen').forEach(screen => screen.classList.add('hidden'));
+      document.getElementById(taskId).classList.remove('hidden');
+    }
+    function startWarmup() {
+      currentTask = 0;
+      randomizedTasks = shuffle(allTasks);
+      initTask(randomizedTasks[currentTask]);
+      showTask(randomizedTasks[currentTask]);
+    }
+    function nextTask() {
+      currentTask++;
+      if (currentTask < randomizedTasks.length) {
+        initTask(randomizedTasks[currentTask]);
+        showTask(randomizedTasks[currentTask]);
+      } else {
+        showTask('warmup-complete');
+      }
+    }
+    function resetWarmup() {
+      showTask('warmup-start');
+    }
+    function initTask(taskId) {
+      if (taskId === 'stroop-task') initStroopTask();
+      else if (taskId === 'number-sequence') initSequenceTask();
+      else if (taskId === 'mental-math') initMathTask();
+      else if (taskId === 'pattern-recognition') initPatternTask();
+    }
+
+    // Stroop Task
+    const colors = ['red', 'blue', 'green', 'yellow'];
+    const words = ['Red', 'Blue', 'Green', 'Yellow'];
+    let currentStroopColor, currentStroopWord;
+    function initStroopTask() {
+      currentStroopColor = colors[Math.floor(Math.random() * colors.length)];
+      currentStroopWord = words[Math.floor(Math.random() * words.length)];
+      const wordElement = document.getElementById('stroop-word');
+      wordElement.textContent = currentStroopWord;
+      wordElement.style.color = currentStroopColor;
+      document.getElementById('stroop-feedback').textContent = '';
+    }
+    function checkStroop(selectedColor) {
+      const feedback = document.getElementById('stroop-feedback');
+      if (selectedColor === currentStroopColor) {
+        feedback.textContent = 'Correct! Moving to next task.';
+        setTimeout(nextTask, 1000);
+      } else {
+        feedback.textContent = 'Try again!';
+      }
+    }
+
+    // Number Sequence Memory
+    let currentSequence;
+    function initSequenceTask() {
+      // Always 5-6 digits
+      const length = Math.floor(Math.random() * 2) + 5; // 5 or 6 digits
+      currentSequence = Array.from({ length }, () => Math.floor(Math.random() * 10)).join(' ');
+      document.getElementById('sequence-display').textContent = currentSequence;
+      document.getElementById('sequence-input').value = '';
+      document.getElementById('sequence-feedback').textContent = '';
+      setTimeout(() => {
+        document.getElementById('sequence-display').textContent = 'Enter the sequence';
+      }, 2500 + Math.random() * 1500);
+    }
+    function checkSequence() {
+      const input = document.getElementById('sequence-input').value.replace(/\s/g, '');
+      const sequence = currentSequence.replace(/\s/g, '');
+      const feedback = document.getElementById('sequence-feedback');
+      if (input === sequence) {
+        feedback.textContent = 'Correct! Moving to next task.';
+        setTimeout(nextTask, 1000);
+      } else {
+        feedback.textContent = `Incorrect. The correct answer was: ${currentSequence}`;
+        setTimeout(nextTask, 2000);
+      }
+    }
+
+    // Mental Math Challenge
+    let mathAnswer;
+    function initMathTask() {
+      // Randomize operation and numbers
+      const ops = [
+        { op: '+', fn: (a, b) => a + b },
+        { op: '-', fn: (a, b) => a - b },
+        { op: '×', fn: (a, b) => a * b },
+        { op: '÷', fn: (a, b) => Math.floor(a / b) }
+      ];
+      const op = ops[Math.floor(Math.random() * ops.length)];
+      let a = Math.floor(Math.random() * 40) + 10;
+      let b = Math.floor(Math.random() * 40) + 2;
+      if (op.op === '÷') {
+        a = a * b; // ensure integer division
+      }
+      document.getElementById('math-problem').textContent = `${a} ${op.op} ${b} = ?`;
+      mathAnswer = op.fn(a, b);
+      document.getElementById('math-answer').value = '';
+      document.getElementById('math-feedback').textContent = '';
+      initCanvas();
+    }
+    function checkMath() {
+      const input = document.getElementById('math-answer').value;
+      const feedback = document.getElementById('math-feedback');
+      if (parseInt(input) === mathAnswer) {
+        feedback.textContent = 'Correct! Moving to next task.';
+        setTimeout(nextTask, 1000);
+      } else {
+        feedback.textContent = 'Try again!';
+      }
+    }
+
+    // Canvas for Mental Math
+    let canvas, ctx, isDrawing = false, tool = 'pen';
+    function initCanvas() {
+      canvas = document.getElementById('math-canvas');
+      ctx = canvas.getContext('2d');
+      ctx.lineWidth = 2;
+      canvas.addEventListener('mousedown', startDrawing);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('mouseup', stopDrawing);
+      canvas.addEventListener('mouseout', stopDrawing);
+    }
+    function setTool(newTool) {
+      tool = newTool;
+    }
+    function startDrawing(e) {
+      isDrawing = true;
+      ctx.beginPath();
+      ctx.moveTo(e.offsetX, e.offsetY);
+    }
+    function draw(e) {
+      if (!isDrawing) return;
+      ctx.strokeStyle = tool === 'pen' ? 'black' : 'white';
+      ctx.lineTo(e.offsetX, e.offsetY);
+      ctx.stroke();
+    }
+    function stopDrawing() {
+      isDrawing = false;
+    }
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Pattern Recognition
+    let patternAnswer;
+    function initPatternTask() {
+      // Randomize pattern type
+      const patterns = [
+        () => {
+          // Squares
+          const start = Math.floor(Math.random() * 4) + 1;
+          const arr = Array.from({length: 5}, (_, i) => (start + i) ** 2);
+          patternAnswer = (start + 5) ** 2;
+          return arr;
+        },
+        () => {
+          // Arithmetic
+          const start = Math.floor(Math.random() * 10) + 1;
+          const diff = Math.floor(Math.random() * 5) + 2;
+          const arr = Array.from({length: 5}, (_, i) => start + i * diff);
+          patternAnswer = start + 5 * diff;
+          return arr;
+        },
+        () => {
+          // Fibonacci
+          let a = 1, b = 1;
+          const arr = [a, b];
+          for (let i = 2; i < 5; i++) {
+            [a, b] = [b, a + b];
+            arr.push(b);
+          }
+          patternAnswer = arr[4] + arr[3];
+          return arr;
+        }
+      ];
+      const patternArr = patterns[Math.floor(Math.random() * patterns.length)]();
+      document.getElementById('pattern-display').textContent = patternArr.join(', ') + ', ?';
+      document.getElementById('pattern-input').value = '';
+      document.getElementById('pattern-feedback').textContent = '';
+    }
+    function checkPattern() {
+      const input = document.getElementById('pattern-input').value;
+      const feedback = document.getElementById('pattern-feedback');
+      if (parseInt(input) === patternAnswer) {
+        feedback.textContent = 'Correct! Moving to next task.';
+        setTimeout(nextTask, 1000);
+      } else {
+        feedback.textContent = 'Try again!';
+      }
+    }
+
+    // --- Mood Prompt Logic ---
+    const moodPromptTimes = ['08:00', '13:00', '19:00']; // Morning, Afternoon, Evening
+    function scheduleMoodPrompts() {
+      moodPromptTimes.forEach(time => {
+        scheduleDailyAt(time, promptMood);
+      });
+    }
+    function scheduleDailyAt(time, callback) {
+      const now = new Date();
+      const [h, m] = time.split(':').map(Number);
+      const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0);
+      if (next < now) next.setDate(next.getDate() + 1);
+      setTimeout(() => {
+        callback();
+        scheduleDailyAt(time, callback);
+      }, next - now);
+    }
+    function promptMood() {
+      if (document.hidden) {
+        if (Notification.permission === 'granted') {
+          new Notification('How are you feeling? Log your mood!');
+        }
+      } else {
+        Swal.fire({
+          title: 'Mood Check',
+          text: 'How are you feeling right now?',
+          input: 'select',
+          inputOptions: {
+            'Happy': 'Happy 😊',
+            'Neutral': 'Neutral 😐',
+            'Sad': 'Sad 😔',
+            'Excited': 'Excited 🎉',
+            'Stressed': 'Stressed 😓'
+          },
+          inputPlaceholder: 'Select your mood',
+          showCancelButton: true
+        }).then(result => {
+          if (result.isConfirmed && result.value) {
+            logMood(result.value, true);
+          }
+        });
+      }
+    }
+
+    // --- Data Models ---
+    let events = loadData('events', []);
+    let goals = loadData('goals', []);
+    let moods = loadData('moods', []); // { mood, date, time }
+    let activities = loadData('activities', []); // { activity, date, time }
+
+    // --- Today (Day-Centric) View ---
+    function renderTodayView(dateStr = null) {
+      const today = dateStr || new Date().toISOString().split('T')[0];
+      document.getElementById('today-date').textContent = today;
+      // Prominent current mood display
+      const currentMoodDiv = document.getElementById('today-current-mood');
+      const emojiMap = {
+        'Happy': '😊',
+        'Neutral': '😐',
+        'Sad': '😔',
+        'Excited': '🎉',
+        'Stressed': '��'
+      };
+      // Timeline
+      const timelineList = document.getElementById('today-timeline');
+      timelineList.innerHTML = '';
+      // Gather all items with time: moods, activities, events/goals
+      let timelineItems = [];
+      moods.filter(m => m.date === today).forEach(m => {
+        timelineItems.push({
+          type: 'mood',
+          time: m.time,
+          label: `${emojiMap[m.mood] || ''} Mood: ${m.mood}`,
+          detail: m.activityRef ? `(after: ${m.activityRef.activity})` : ''
+        });
+      });
+      activities.filter(a => a.date === today).forEach(a => {
+        timelineItems.push({
+          type: 'activity',
+          time: a.time,
+          label: `Activity: ${a.activity}`
+        });
+      });
+      events.filter(e => e.start === today && !e.title.startsWith('Mood:')).forEach(e => {
+        timelineItems.push({
+          type: 'event',
+          time: e.time || '00:00',
+          label: e.title
+        });
+      });
+      // Sort by time
+      timelineItems.sort((a, b) => a.time.localeCompare(b.time));
+      if (timelineItems.length > 0) {
+        timelineItems.forEach(item => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center gap-2';
+          let icon = '';
+          if (item.type === 'mood') icon = `<span class='material-icons text-blue-400'>mood</span>`;
+          if (item.type === 'activity') icon = `<span class='material-icons text-green-400'>directions_run</span>`;
+          if (item.type === 'event') icon = `<span class='material-icons text-purple-400'>flag</span>`;
+          li.innerHTML = `${icon}<span class='font-mono text-gray-600 w-16'>${item.time}</span> <span>${item.label}</span> <span class='text-xs text-gray-400 ml-2'>${item.detail || ''}</span>`;
+          timelineList.appendChild(li);
+        });
+      } else {
+        const li = document.createElement('li');
+        li.className = 'text-gray-400 italic';
+        li.textContent = 'No timeline items for today.';
+        timelineList.appendChild(li);
+      }
+      // Moods
+      const moodList = document.getElementById('today-moods');
+      moodList.innerHTML = '';
+      const todayMoods = moods.filter(m => m.date === today);
+      if (todayMoods.length > 0) {
+        const latestMood = todayMoods[todayMoods.length - 1];
+        currentMoodDiv.innerHTML = `<div class='flex items-center bg-blue-100 text-blue-800 rounded-lg px-6 py-4 text-xl font-semibold shadow'><span class='text-3xl mr-3'>${emojiMap[latestMood.mood] || ''}</span> ${latestMood.mood} <span class='ml-3 text-sm text-gray-500'>at ${latestMood.time}</span></div>`;
+        todayMoods.forEach(m => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center bg-blue-50 rounded px-3 py-2 shadow-sm';
+          if (m.activityRef) {
+            li.innerHTML = `<span class='text-lg mr-2'>${emojiMap[m.mood] || ''}</span> ${m.time} - ${m.mood} <span class='text-xs text-blue-600'>(after: ${m.activityRef.activity})</span>`;
+          } else {
+            li.innerHTML = `<span class='text-lg mr-2'>${emojiMap[m.mood] || ''}</span> ${m.time} - ${m.mood}`;
+          }
+          moodList.appendChild(li);
+        });
+      } else {
+        currentMoodDiv.innerHTML = `<div class='bg-gray-100 text-gray-500 rounded-lg px-6 py-4 text-xl shadow'>No mood logged yet today.</div>`;
+        const li = document.createElement('li');
+        li.className = 'text-gray-400 italic';
+        li.textContent = 'No moods logged yet.';
+        moodList.appendChild(li);
+      }
+      // Activities
+      const activityList = document.getElementById('today-activities');
+      activityList.innerHTML = '';
+      const todayActivities = activities.filter(a => a.date === today);
+      if (todayActivities.length > 0) {
+        todayActivities.forEach(a => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center bg-green-50 rounded px-3 py-2 shadow-sm';
+          li.innerHTML = `<span class='material-icons text-green-400 mr-2'>directions_run</span> ${a.time} - ${a.activity}`;
+          activityList.appendChild(li);
+        });
+      } else {
+        const li = document.createElement('li');
+        li.className = 'text-gray-400 italic';
+        li.textContent = 'No activities logged yet.';
+        activityList.appendChild(li);
+      }
+      // Events & Goals (exclude moods)
+      const eventList = document.getElementById('today-events');
+      eventList.innerHTML = '';
+      const todayEvents = events.filter(e => e.start === today && !e.title.startsWith('Mood:'));
+      if (todayEvents.length > 0) {
+        todayEvents.forEach(e => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center bg-purple-50 rounded px-3 py-2 shadow-sm';
+          li.innerHTML = `<span class='material-icons text-purple-400 mr-2'>flag</span> ${e.time ? e.time + ' - ' : ''}${e.title}`;
+          eventList.appendChild(li);
+        });
+      } else {
+        const li = document.createElement('li');
+        li.className = 'text-gray-400 italic';
+        li.textContent = 'No goals or events for today.';
+        eventList.appendChild(li);
+      }
+    }
+
+    // --- Calendar Logic ---
+    let calendar;
+    function renderCalendar() {
+      const calendarEl = document.getElementById('calendar-view');
+      if (calendar) calendar.destroy();
+      calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        events: events.map(e => ({
+          ...e,
+          title: e.time ? `${e.time} - ${e.title}` : e.title
+        })),
+        dateClick: function(info) {
+          showSection('today');
+          renderTodayView(info.dateStr);
+        },
+        eventClick: function(info) {
+          Swal.fire(`Event: ${info.event.title}\nDate: ${info.event.start.toLocaleDateString()}`);
+        }
+      });
+      calendar.render();
+    }
+
+    // --- Daily Modal ---
+    function openDailyModal(dateStr) {
+      document.getElementById('daily-modal').classList.remove('hidden');
+      document.getElementById('modal-date-title').textContent = `Details for ${dateStr}`;
+      // Moods
+      const moodList = document.getElementById('modal-moods');
+      moodList.innerHTML = '';
+      moods.filter(m => m.date === dateStr).forEach(m => {
+        const li = document.createElement('li');
+        if (m.activityRef) {
+          li.innerHTML = `${m.time} - ${m.mood} <span class='text-xs text-blue-600'>(after: ${m.activityRef.activity})</span>`;
+        } else {
+          li.textContent = `${m.time} - ${m.mood}`;
+        }
+        moodList.appendChild(li);
+      });
+      // Activities
+      const activityList = document.getElementById('modal-activities');
+      activityList.innerHTML = '';
+      activities.filter(a => a.date === dateStr).forEach(a => {
+        const li = document.createElement('li');
+        li.textContent = `${a.time} - ${a.activity}`;
+        activityList.appendChild(li);
+      });
+      // Events & Goals
+      const eventList = document.getElementById('modal-events');
+      eventList.innerHTML = '';
+      events.filter(e => e.start === dateStr).forEach(e => {
+        const li = document.createElement('li');
+        li.textContent = e.title;
+        eventList.appendChild(li);
+      });
+    }
+    function closeDailyModal() {
+      document.getElementById('daily-modal').classList.add('hidden');
+    }
+
+    // --- Mood Tracker ---
+    function logMood(selectedMood, fromPrompt = false, activityRef = null) {
+      let moodSelect, moodValue;
+      if (fromPrompt) {
+        moodValue = selectedMood;
+      } else {
+        moodSelect = document.getElementById('mood-select');
+        moodValue = moodSelect ? moodSelect.value : selectedMood;
+      }
+      if (moodValue) {
+        const now = new Date();
+        const date = now.toISOString().split('T')[0];
+        const time = now.toTimeString().slice(0,5);
+        const moodObj = { mood: moodValue, date, time };
+        if (activityRef) {
+          moodObj.activityRef = { activity: activityRef.activity, time: activityRef.time };
+        }
+        moods.push(moodObj);
+        events.push({ title: `Mood: ${moodValue}`, start: date });
+        saveData('moods', moods);
+        saveData('events', events);
+        if (calendar) calendar.addEvent({ title: `Mood: ${moodValue}`, start: date });
+        updateMoodHistory();
+        if (!fromPrompt && moodSelect) moodSelect.value = '';
+        updateDashboard();
+      }
+    }
+    function updateMoodHistory() {
+      const moodHistory = document.getElementById('mood-history');
+      moodHistory.innerHTML = '';
+      moods.slice(-10).reverse().forEach(({ mood, date, time, activityRef }) => {
+        const p = document.createElement('p');
+        if (activityRef) {
+          p.innerHTML = `${date} ${time}: ${mood} <span class='text-xs text-blue-600'>(after: ${activityRef.activity})</span>`;
+        } else {
+          p.textContent = `${date} ${time}: ${mood}`;
+        }
+        p.className = 'p-2 border-b';
+        moodHistory.appendChild(p);
+      });
+    }
+
+    // --- Activity Log ---
+    function logActivity() {
+      const activityInput = document.getElementById('activity-input').value.trim();
+      if (activityInput) {
+        const now = new Date();
+        const date = now.toISOString().split('T')[0];
+        const time = now.toTimeString().slice(0,5);
+        const activityObj = { activity: activityInput, date, time };
+        activities.push(activityObj);
+        events.push({ title: `Activity: ${activityInput}`, start: date });
+        saveData('activities', activities);
+        saveData('events', events);
+        if (calendar) calendar.addEvent({ title: `Activity: ${activityInput}`, start: date });
+        updateActivityList();
+        document.getElementById('activity-input').value = '';
+        updateDashboard();
+      }
+    }
+    function updateActivityList() {
+      const activityList = document.getElementById('activity-list');
+      activityList.innerHTML = '';
+      if (activities.length === 0) {
+        activityList.innerHTML = '<li class="p-2 border-b">No activities logged yet.</li>';
+      } else {
+        activities.slice(-10).reverse().forEach(({ activity, date, time }) => {
+          const li = document.createElement('li');
+          li.textContent = `${date} ${time}: ${activity}`;
+          li.className = 'p-2 border-b';
+          activityList.appendChild(li);
+        });
+      }
+    }
+
+    // --- Goal Setting & Reminders ---
+    function addGoal() {
+      const goalInput = document.getElementById('goal-input').value.trim();
+      const goalDate = document.getElementById('goal-date').value;
+      const goalTime = document.getElementById('goal-time').value;
+      const reminderTime = document.getElementById('goal-reminder').value;
+      if (goalInput && goalDate && reminderTime) {
+        goals.push({ text: goalInput, date: goalDate, time: goalTime, reminderTime });
+        events.push({ title: `Goal: ${goalInput}`, start: goalDate, time: goalTime });
+        saveData('goals', goals);
+        saveData('events', events);
+        if (calendar) calendar.addEvent({ title: goalTime ? `${goalTime} - Goal: ${goalInput}` : `Goal: ${goalInput}`, start: goalDate });
+        updateGoalList();
+        document.getElementById('goal-input').value = '';
+        document.getElementById('goal-date').value = '';
+        document.getElementById('goal-time').value = '';
+        document.getElementById('goal-reminder').value = '';
+        updateDashboard();
+        scheduleGoalReminder(goalInput, goalDate, reminderTime);
+      }
+    }
+    function updateGoalList() {
+      const goalList = document.getElementById('goal-list');
+      goalList.innerHTML = '';
+      goals.slice(-10).reverse().forEach(({ text, date, time, reminderTime }) => {
+        const li = document.createElement('li');
+        li.textContent = `${text} (Due: ${date}${time ? ' at ' + time : ''}${reminderTime ? ', reminder: ' + reminderTime : ''})`;
+        li.className = 'p-2 border-b';
+        goalList.appendChild(li);
+      });
+    }
+    function scheduleGoalReminders() {
+      goals.forEach(goal => {
+        scheduleGoalReminder(goal.text, goal.date, goal.reminderTime);
+      });
+    }
+    function scheduleGoalReminder(text, date, time) {
+      const now = new Date();
+      const goalDateTime = new Date(`${date}T${time}`);
+      if (goalDateTime > now) {
+        setTimeout(() => {
+          if (Notification.permission === 'granted') {
+            new Notification(`Goal Reminder: ${text}`);
+          } else {
+            Swal.fire('Goal Reminder', text, 'info');
+          }
+        }, goalDateTime - now);
+      }
+    }
+
+    // --- Update Dashboard ---
+    function updateDashboard() {
+      document.getElementById('goals-completed').textContent = goals.length;
+      document.getElementById('mood-today').textContent = moods.length > 0 ? moods[moods.length - 1].mood : 'Not set';
+      document.getElementById('activities-logged').textContent = activities.length;
+    }
+
+    // --- Initialize ---
+    showSection('today');
+    updateGoalList();
+    updateMoodHistory();
+    updateActivityList();
+    updateDashboard();
+    scheduleMoodPrompts();
+    scheduleGoalReminders();
+  </script>
+</body>
+</html>
