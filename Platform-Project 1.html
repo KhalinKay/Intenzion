@@ -60,9 +60,9 @@
 <body class="bg-gray-100 font-sans">
   <div class="container mx-auto p-4">
     <!-- Header -->
-    <header class="bg-blue-600 text-white p-4 rounded-lg shadow-md mb-6">
-      <h1 class="text-3xl font-bold">Personal Assistant Dashboard</h1>
-      <p class="text-lg">Your hub for productivity and wellness</p>
+    <header class="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white p-8 rounded-2xl shadow-xl mb-10 flex flex-col items-center justify-center">
+      <h1 class="text-4xl font-extrabold tracking-tight mb-2 text-center drop-shadow">Personal Assistant Dashboard</h1>
+      <p class="text-lg text-center opacity-90">Your hub for productivity and wellness</p>
     </header>
 
     <!-- Navigation -->
@@ -266,21 +266,31 @@
 
     // Brain Warm-Up Logic
     let currentTask = 0;
-    const tasks = ['stroop-task', 'number-sequence', 'mental-math', 'pattern-recognition'];
+    let randomizedTasks = [];
+    const allTasks = ['stroop-task', 'number-sequence', 'mental-math', 'pattern-recognition'];
+    function shuffle(array) {
+      let arr = array.slice();
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
     function showTask(taskId) {
       document.querySelectorAll('.warmup-screen').forEach(screen => screen.classList.add('hidden'));
       document.getElementById(taskId).classList.remove('hidden');
     }
     function startWarmup() {
       currentTask = 0;
-      initStroopTask();
-      showTask(tasks[currentTask]);
+      randomizedTasks = shuffle(allTasks);
+      initTask(randomizedTasks[currentTask]);
+      showTask(randomizedTasks[currentTask]);
     }
     function nextTask() {
       currentTask++;
-      if (currentTask < tasks.length) {
-        initTask(tasks[currentTask]);
-        showTask(tasks[currentTask]);
+      if (currentTask < randomizedTasks.length) {
+        initTask(randomizedTasks[currentTask]);
+        showTask(randomizedTasks[currentTask]);
       } else {
         showTask('warmup-complete');
       }
@@ -320,13 +330,15 @@
     // Number Sequence Memory
     let currentSequence;
     function initSequenceTask() {
-      currentSequence = Array.from({ length: 5 }, () => Math.floor(Math.random() * 10)).join(' ');
+      // Randomize length and numbers
+      const length = Math.floor(Math.random() * 3) + 4; // 4-6 digits
+      currentSequence = Array.from({ length }, () => Math.floor(Math.random() * 10)).join(' ');
       document.getElementById('sequence-display').textContent = currentSequence;
       document.getElementById('sequence-input').value = '';
       document.getElementById('sequence-feedback').textContent = '';
       setTimeout(() => {
         document.getElementById('sequence-display').textContent = 'Enter the sequence';
-      }, 3000);
+      }, 2500 + Math.random() * 1500);
     }
     function checkSequence() {
       const input = document.getElementById('sequence-input').value.replace(/\s/g, '');
@@ -343,10 +355,21 @@
     // Mental Math Challenge
     let mathAnswer;
     function initMathTask() {
-      const a = Math.floor(Math.random() * 20) + 10;
-      const b = Math.floor(Math.random() * 20) + 10;
-      document.getElementById('math-problem').textContent = `${a} × ${b} = ?`;
-      mathAnswer = a * b;
+      // Randomize operation and numbers
+      const ops = [
+        { op: '+', fn: (a, b) => a + b },
+        { op: '-', fn: (a, b) => a - b },
+        { op: '×', fn: (a, b) => a * b },
+        { op: '÷', fn: (a, b) => Math.floor(a / b) }
+      ];
+      const op = ops[Math.floor(Math.random() * ops.length)];
+      let a = Math.floor(Math.random() * 40) + 10;
+      let b = Math.floor(Math.random() * 40) + 2;
+      if (op.op === '÷') {
+        a = a * b; // ensure integer division
+      }
+      document.getElementById('math-problem').textContent = `${a} ${op.op} ${b} = ?`;
+      mathAnswer = op.fn(a, b);
       document.getElementById('math-answer').value = '';
       document.getElementById('math-feedback').textContent = '';
       initCanvas();
@@ -397,9 +420,37 @@
     // Pattern Recognition
     let patternAnswer;
     function initPatternTask() {
-      const pattern = [1, 4, 9, 16, 25];
-      patternAnswer = 36; // Next square number
-      document.getElementById('pattern-display').textContent = pattern.join(', ') + ', ?';
+      // Randomize pattern type
+      const patterns = [
+        () => {
+          // Squares
+          const start = Math.floor(Math.random() * 4) + 1;
+          const arr = Array.from({length: 5}, (_, i) => (start + i) ** 2);
+          patternAnswer = (start + 5) ** 2;
+          return arr;
+        },
+        () => {
+          // Arithmetic
+          const start = Math.floor(Math.random() * 10) + 1;
+          const diff = Math.floor(Math.random() * 5) + 2;
+          const arr = Array.from({length: 5}, (_, i) => start + i * diff);
+          patternAnswer = start + 5 * diff;
+          return arr;
+        },
+        () => {
+          // Fibonacci
+          let a = 1, b = 1;
+          const arr = [a, b];
+          for (let i = 2; i < 5; i++) {
+            [a, b] = [b, a + b];
+            arr.push(b);
+          }
+          patternAnswer = arr[4] + arr[3];
+          return arr;
+        }
+      ];
+      const patternArr = patterns[Math.floor(Math.random() * patterns.length)]();
+      document.getElementById('pattern-display').textContent = patternArr.join(', ') + ', ?';
       document.getElementById('pattern-input').value = '';
       document.getElementById('pattern-feedback').textContent = '';
     }
@@ -470,51 +521,71 @@
       document.getElementById('today-date').textContent = today;
       // Prominent current mood display
       const currentMoodDiv = document.getElementById('today-current-mood');
-      const todayMoods = moods.filter(m => m.date === today);
-      if (todayMoods.length > 0) {
-        const latestMood = todayMoods[todayMoods.length - 1];
-        const emojiMap = {
-          'Happy': '😊',
-          'Neutral': '😐',
-          'Sad': '😔',
-          'Excited': '🎉',
-          'Stressed': '😓'
-        };
-        currentMoodDiv.innerHTML = `<div class='flex items-center bg-blue-100 text-blue-800 rounded-lg px-6 py-4 text-xl font-semibold shadow'><span class='text-3xl mr-3'>${emojiMap[latestMood.mood] || ''}</span> ${latestMood.mood} <span class='ml-3 text-sm text-gray-500'>at ${latestMood.time}</span></div>`;
-      } else {
-        currentMoodDiv.innerHTML = `<div class='bg-gray-100 text-gray-500 rounded-lg px-6 py-4 text-xl shadow'>No mood logged yet today.</div>`;
-      }
+      const emojiMap = {
+        'Happy': '😊',
+        'Neutral': '😐',
+        'Sad': '😔',
+        'Excited': '🎉',
+        'Stressed': '😓'
+      };
       // Moods
       const moodList = document.getElementById('today-moods');
       moodList.innerHTML = '';
-      todayMoods.forEach(m => {
+      const todayMoods = moods.filter(m => m.date === today);
+      if (todayMoods.length > 0) {
+        const latestMood = todayMoods[todayMoods.length - 1];
+        currentMoodDiv.innerHTML = `<div class='flex items-center bg-blue-100 text-blue-800 rounded-lg px-6 py-4 text-xl font-semibold shadow'><span class='text-3xl mr-3'>${emojiMap[latestMood.mood] || ''}</span> ${latestMood.mood} <span class='ml-3 text-sm text-gray-500'>at ${latestMood.time}</span></div>`;
+        todayMoods.forEach(m => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center bg-blue-50 rounded px-3 py-2 shadow-sm';
+          if (m.activityRef) {
+            li.innerHTML = `<span class='text-lg mr-2'>${emojiMap[m.mood] || ''}</span> ${m.time} - ${m.mood} <span class='text-xs text-blue-600'>(after: ${m.activityRef.activity})</span>`;
+          } else {
+            li.innerHTML = `<span class='text-lg mr-2'>${emojiMap[m.mood] || ''}</span> ${m.time} - ${m.mood}`;
+          }
+          moodList.appendChild(li);
+        });
+      } else {
+        currentMoodDiv.innerHTML = `<div class='bg-gray-100 text-gray-500 rounded-lg px-6 py-4 text-xl shadow'>No mood logged yet today.</div>`;
         const li = document.createElement('li');
-        li.className = 'flex items-center bg-blue-50 rounded px-3 py-2 shadow-sm';
-        if (m.activityRef) {
-          li.innerHTML = `<span class='text-lg mr-2'>${emojiMap[m.mood] || ''}</span> ${m.time} - ${m.mood} <span class='text-xs text-blue-600'>(after: ${m.activityRef.activity})</span>`;
-        } else {
-          li.innerHTML = `<span class='text-lg mr-2'>${emojiMap[m.mood] || ''}</span> ${m.time} - ${m.mood}`;
-        }
+        li.className = 'text-gray-400 italic';
+        li.textContent = 'No moods logged yet.';
         moodList.appendChild(li);
-      });
+      }
       // Activities
       const activityList = document.getElementById('today-activities');
       activityList.innerHTML = '';
-      activities.filter(a => a.date === today).forEach(a => {
+      const todayActivities = activities.filter(a => a.date === today);
+      if (todayActivities.length > 0) {
+        todayActivities.forEach(a => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center bg-green-50 rounded px-3 py-2 shadow-sm';
+          li.innerHTML = `<span class='material-icons text-green-400 mr-2'>directions_run</span> ${a.time} - ${a.activity}`;
+          activityList.appendChild(li);
+        });
+      } else {
         const li = document.createElement('li');
-        li.className = 'flex items-center bg-green-50 rounded px-3 py-2 shadow-sm';
-        li.innerHTML = `<span class='material-icons text-green-400 mr-2'>directions_run</span> ${a.time} - ${a.activity}`;
+        li.className = 'text-gray-400 italic';
+        li.textContent = 'No activities logged yet.';
         activityList.appendChild(li);
-      });
+      }
       // Events & Goals (exclude moods)
       const eventList = document.getElementById('today-events');
       eventList.innerHTML = '';
-      events.filter(e => e.start === today && !e.title.startsWith('Mood:')).forEach(e => {
+      const todayEvents = events.filter(e => e.start === today && !e.title.startsWith('Mood:'));
+      if (todayEvents.length > 0) {
+        todayEvents.forEach(e => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center bg-purple-50 rounded px-3 py-2 shadow-sm';
+          li.innerHTML = `<span class='material-icons text-purple-400 mr-2'>flag</span> ${e.title}`;
+          eventList.appendChild(li);
+        });
+      } else {
         const li = document.createElement('li');
-        li.className = 'flex items-center bg-purple-50 rounded px-3 py-2 shadow-sm';
-        li.innerHTML = `<span class='material-icons text-purple-400 mr-2'>flag</span> ${e.title}`;
+        li.className = 'text-gray-400 italic';
+        li.textContent = 'No goals or events for today.';
         eventList.appendChild(li);
-      });
+      }
     }
 
     // --- Calendar Logic ---
